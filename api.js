@@ -172,6 +172,9 @@ app.get("/getjoke", (req, res) => {
     gatherJSONResponse();
 })
 
+app.get("/", (req, res) => {
+    res.send("Hello?")
+})
 
 // Function that states the port we're listening to
 app.listen(PORT, () => {
