@@ -177,6 +177,6 @@ app.get("/", (req, res) => {
 })
 
 // Function that states the port we're listening to
-app.listen(PORT, () => {
-  console.log(`App is running on port ${PORT}`)
+app.listen(process.env.PORT || 3000, () => {
+  console.log(`App is running on port ${process.env.PORT}`)
 })
