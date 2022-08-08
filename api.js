@@ -18,10 +18,10 @@ app.use(cors());
 function generateGuid() {
   var result, i, j;
   result = '';
-  for(j=0; j<32; j++) {
-    if( j == 8 || j == 12 || j == 16 || j == 20)
+  for (j = 0; j < 32; j++) {
+    if (j == 8 || j == 12 || j == 16 || j == 20)
       result = result + '-';
-    i = Math.floor(Math.random()*16).toString(16).toUpperCase();
+    i = Math.floor(Math.random() * 16).toString(16).toUpperCase();
     result = result + i;
   }
   return result;
@@ -39,10 +39,11 @@ let postRequest = {
 async function getInferenceToken() {
   try {
     postRequest.uuid_idempotency_token = generateGuid();
+    console.log("TOKEN => ", postRequest.uuid_idempotency_token)
     const resp = await fetch("https://api.fakeyou.com/tts/inference", {
       method: 'POST',
       body: JSON.stringify(postRequest),
-      headers: {'Content-Type':'application/json'}
+      headers: { 'Content-Type': 'application/json' }
     })
     const data = await resp.json()
     return data
@@ -50,7 +51,7 @@ async function getInferenceToken() {
   } catch (error) {
     console.log("err inference", error)
   }
-  
+
 }
 
 // Fetch every 3s during the poll request for the FakeYou API
@@ -58,9 +59,9 @@ async function fetchPatiently(url, params) {
   let response = await fetch(url, params);
 
   while (response.status === 408 || response.status === 502) {
-      // Wait three seconds between each new request
-      await new Promise(res => setTimeout(res, 3000));
-      response = await fetch(url, params);
+    // Wait three seconds between each new request
+    await new Promise(res => setTimeout(res, 3000));
+    response = await fetch(url, params);
   }
 
   return response;
@@ -68,61 +69,79 @@ async function fetchPatiently(url, params) {
 
 // Poll request for the FakeYou API
 function pollRequest(token) {
-  console.log("Polling...")
-  return new Promise(async(resolve, reject) => {
+  console.log(`Polling... (${token})`)
+  return new Promise(async (resolve, reject) => {
 
-      // Wait one second between each poll request
-      await new Promise(res => setTimeout(res, 1000));
+    // Wait one second between each poll request
+    await new Promise(res => setTimeout(res, 1000));
 
-      // Retrieve status of current speech request
-      console.log('Fetching...')
-      const response = await fetchPatiently(`https://api.fakeyou.com/tts/job/${token}`, {
-          method: "GET",
-          headers: {
-              // "Authorization": fakeYouToken,
-              "Accept": "application/json"
+    // Retrieve status of current speech request
+    console.log('Fetching...')
+    const response = await fetchPatiently(`https://api.fakeyou.com/tts/job/${token}`, {
+      method: "GET",
+      headers: {
+        // "Authorization": fakeYouToken,
+        "Accept": "application/json"
+      }
+    }).catch(error => {
+      reject(`HTTP error! ${error.name}`);
+      console.error(error);
+    })
+
+    // Parse JSON to JS object and checks for any error
+    const json = await response.json().catch(error => {
+      console.log(json);
+      reject("Failed to parse poll JSON")
+    });
+
+
+    if (!json || !json.success) {
+      //reject(`Failed poling! ${json.error_reason}`)
+      console.error("jason", json);
+      console.log("AAAAAAAAAA trying again after server error")
+      await getInferenceToken()
+        .then (res => {
+          if (res.error_reason === "rate limited") {
+            audioLink = "rate_limited"
+            return;
+          } else {
+            pollRequest(res.inference_job_token)
           }
-      }).catch(error => {
-          reject(`HTTP error! ${error.name}`);
-          console.error(error);
+        })
+        .catch(err => console.log(err))
+        return;
+    }
+
+
+    // Checks for the status of the JSON parse and, if successful, assigns the audio link with the correct info
+    if (json.error_reason === 'server error') {
+      console.log("XD")
+    } else {
+      switch (json.state.status) {
+        case "pending": {
+          console.log("STATUS: Pending...")
+        }
+        case "started": {
+          console.log("STATUS: Started...")
+        }
+        case "attempt_failed": {
+          console.log("STATUS: Failed (trying again...)")
+          await pollRequest(token).then(resolve).catch(reject);
+        }
+        case "complete_success": {
+          console.log("STATUS: Done!")
+          audioLink = `https://storage.googleapis.com/vocodes-public${json.state.maybe_public_bucket_wav_audio_path}`;
+          break;
+        }
+        default:
+          console.log("Big error, exiting for the best.");
+          break;
+      }
+    }
+
+
   })
- 
-  // Parse JSON to JS object and checks for any error
-  const json = await response.json().catch(error => {
-    console.log(json);
-    reject("Failed to parse poll JSON")
-  });
-
-  if (!json) return;
-
-  if (!json.success) {
-    reject(`Failed poling! ${json.error_reason}`)
-    console.error("jason",json);
-    return 
-  }
-
-  // Checks for the status of the JSON parse and, if successful, assigns the audio link with the correct info
-  switch (json.state.status) {
-    case "pending":{
-      console.log("STATUS: Pending...")
-    }
-    case "started":{
-      console.log("STATUS: Started...")
-    }
-    case "attempt_failed":{
-      console.log("STATUS: Failed (trying again...)")
-      await pollRequest(token).then(resolve).catch(reject);
-    }
-    case "complete_success":{
-      console.log("STATUS: Done!")
-      audioLink = `https://storage.googleapis.com/vocodes-public${json.state.maybe_public_bucket_wav_audio_path}`;
-      break;
-    }
-    default:
-      console.log("Big error, exiting for the best.");
-      break;
-  }
-})}
+}
 
 // API call to get a random joke from the JokeAPI
 async function getJoke(jokeCategory) {
@@ -146,8 +165,8 @@ const setUpJoke = (res) => {
 
   // We call the getInferenceToken function
   getInferenceToken()
-  .then(res => pollRequest(res.inference_job_token))
-  .catch(err => console.log(err))
+    .then(res => pollRequest(res.inference_job_token))
+    .catch(err => console.log(err))
 }
 
 
@@ -155,30 +174,30 @@ const setUpJoke = (res) => {
 app.get("/getjoke", (req, res) => {
   console.log(req.headers.jokecategory)
   console.time("time")
-  async function gatherJSONResponse() { 
+  async function gatherJSONResponse() {
     await getJoke(req.headers.jokecategory)
-    .then(async()=> {
-    while (audioLink==="") {
-      console.log("Audio link is empty 👁  👁")
-      await new Promise(res => setTimeout(res, 1000));
-    } 
-    })
-    .then(()=>res.send(JSON.stringify({"joke":postRequest.inference_text, "audio":audioLink})))
-    .then(audioLink = "")
+      .then(async () => {
+        while (audioLink === "") {
+          console.log("Audio link is empty 👁  👁")
+          await new Promise(res => setTimeout(res, 1000));
+        }
+      })
+      .then(() => res.send(JSON.stringify({ "joke": postRequest.inference_text, "audio": audioLink })))
+      .then(audioLink = "")
     console.timeEnd("time")
-   
-    }
-    
-    gatherJSONResponse();
+
+  }
+
+  gatherJSONResponse();
 })
 
 app.get("/", (req, res) => {
-    res.send("Hello?")
+  res.send("Hello?")
 })
-
+// process.env.PORT ||
 // Function that states the port we're listening to
-app.listen(process.env.PORT || 3000, () => {
-  console.log(`App is running on port ${process.env.PORT}`)
+app.listen(3000, () => {
+  console.log(`App is running on port ${3000}`)
 })
 
 
